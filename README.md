@@ -1,6 +1,6 @@
 # Recall
 
-A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestone 1 is implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
+A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1 and 2 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
 
 ## Run locally
 
@@ -35,10 +35,26 @@ Open `http://127.0.0.1:4173/quizrep/`. On macOS/Linux, use `VITE_BASE_PATH=/quiz
 - Explicit acknowledgment before skipping invalid rows or importing a matching title/source as a **new** set. Nothing is overwritten. Cancel saves nothing. All selected sets are saved in one transaction.
 - Manual set/card creation, title/description editing, card editing, reorder, confirmed card removal and confirmed set deletion.
 - Persistent IndexedDB storage, transactional CRUD, cascading deletion of associated cards/progress/history, and an explicit v1 → v2 migration that backfills normalized identity keys without changing display text.
-- Offline app-shell precaching, manifest and PNG install icons, subpath support, and a user-controlled update prompt. Updates wait until editors/import dialogs are closed.
+- Offline app-shell precaching, manifest and PNG install icons, subpath support, and a user-controlled update prompt. Updates wait until editors/import dialogs are closed and you leave Study. First installation claims the open page once caching completes; updates still require user confirmation.
 - Best-effort persistent-storage request and clear local-data limitations in Settings.
 
-Study and Progress navigation intentionally explain the next milestones; they do not show fabricated metrics or claim working Learn/Test modes. Set details display both sides for browsing while offline.
+## Study modes (Milestone 2)
+
+Open a set and tap **Study this set**, or select it from the **Study** tab.
+
+- **Flashcards:** tap to flip, Previous/Next, swipe left/right, shuffle and reverse direction. Space flips and arrow keys navigate when no interactive control has focus. The revealed-card count is a session browsing count, not correctness or mastery.
+- **Learn:** choose Mixed, Multiple choice or Written answers. Immediate feedback shows the expected answer. Misses return after up to two other questions, with at most three attempts per card. The summary separates first-attempt accuracy from correctness across all attempts and lists mistakes.
+- **Test:** choose 1–100 unique cards (bounded by set size), direction, question style and matching rules. Questions are randomized without repeats. Submitted answers are final; score and mistake review appear after the last question.
+- Multiple-choice options come from the actual set and exclude equivalent or alternate correct answers. A question falls back to written when no distinct incorrect answer exists, including one-card sets. Identical prompts with distinct definitions accept any corresponding definition when typed.
+- Lenient matching ignores case, extra whitespace and Latin accents. Hindi vowel signs and nukta stay significant. Strict matching retains case, accents and internal spacing. Both trim outer whitespace and consider canonically equivalent Unicode equal; neither removes punctuation.
+- Every submitted answer, feedback state and Flashcards action is saved to IndexedDB before moving on. **Pause session**, or reopen the set's study options and choose **Resume**. Completed sessions offer **View results**. Unsubmitted text is not saved. The ten most recent sessions for the set appear in the UI; older history remains in storage.
+- Sessions keep a snapshot of their starting card text so edits do not silently change grading mid-session. Start a new session to include edits. Deleting the set cascades its sessions. Storage failures show an error and retain the current question for retry.
+
+No per-card review scheduling or mastery values are created by Milestone 2. Those belong to Milestone 3. Progress explains this distinction; actual session summaries are available under each set's study options.
+
+### Updating your installed app
+
+You do not need to stop or uninstall the existing phone app during development. After the new milestone is pushed, run the existing GitHub Pages workflow. Once deployment succeeds, open Recall online, return to **Library**, and tap **Update app** when offered. If no update prompt appears, close and reopen it online. Keep the same URL and do not clear website data: existing sets and sessions remain in IndexedDB. The update prompt is hidden on Study so it cannot reload an active question.
 
 ## Import format and safeguards
 
@@ -69,9 +85,9 @@ pnpm test:e2e
 
 `test:e2e` first builds at `/quizrep/` and starts a production preview. Windows uses installed Microsoft Edge; other platforms use Playwright Chromium (`pnpm exec playwright install chromium` first). Set `PLAYWRIGHT_CHANNEL` to override the installed browser channel. The mobile project emulates an iPhone viewport in Chromium; it **does not claim to test iOS Safari**.
 
-Unit tests cover parser edge cases/limits/read failures, persistent reopen, validation, progress preservation/reset, foreign identity rejection, cascade deletion, v1 migration, and reset. Browser tests cover multi-file imports and skipped rows, no uploads/external requests, cancellation, duplicate-source acknowledgment, manual CRUD/reorder/confirmation, theme persistence, mobile overflow and actual service-worker offline reload at a repository subpath. Screenshots and failing traces are written to ignored `test-results/`.
+Unit tests cover parser edge cases/limits/read failures, persistent reopen, validation, progress preservation/reset, foreign identity rejection, cascade deletion, v1 migration, and reset. Browser tests cover multi-file imports and skipped rows, no uploads/external requests, cancellation, duplicate-source acknowledgment, manual CRUD/reorder/confirmation, theme persistence, mobile overflow and actual service-worker offline reload at a repository subpath. Study tests cover matching rules, Hindi marks, unique test generation, alternate answers, tiny sets, retry limits, scoring, session persistence, keyboard controls, offline resume, and saved results. Screenshots and failing traces are written to ignored `test-results/`.
 
-Verified in this Windows workspace: TypeScript passed, **15 unit tests passed**, **8 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 403 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
+Verified in this Windows workspace: TypeScript passed, **24 unit tests passed**, **14 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 425 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
 
 If pnpm is not available in your terminal, install the pinned pnpm version or use your environment's bundled pnpm executable. After dependency installation, you can also start development directly with `node node_modules/vite/bin/vite.js`.
 
@@ -94,9 +110,9 @@ Completed milestones are committed and pushed to GitHub after validation, with i
 
 ## Architecture and remaining milestones
 
-`src/app` owns navigation/shell and PWA status; `src/features/library` owns the library/editor/detail screens; `src/features/import` contains the independent parser and wizard; `src/db` owns schema/migrations/transactional operations; `src/domain` defines stable entities and identity; `src/components` contains shared dialogs; `src/styles` contains Tailwind plus responsive component styles. Future schema changes must add a new Dexie version and migration test. `resetLibrary` is tested as an internal maintenance operation, not exposed as a destructive Settings button.
+`src/app` owns navigation/shell and PWA status; `src/features/library` owns the library/editor/detail screens; `src/features/import` contains the independent parser and wizard; `src/db` owns schema/migrations/transactional operations; `src/domain` defines stable entities and identity; `src/components` contains shared dialogs; `src/styles` contains Tailwind plus responsive component styles. Study logic lives in `src/domain/study.ts`, session writes in `src/db/study.ts`, and study UI in `src/features/study`, `flashcards`, `learn` and `test`. Milestone 2 adds an optional `run` payload to existing session records without changing indexes, so the version-2 database remains compatible and no migration/reset is needed. Future schema/index changes must add a new Dexie version and migration test. `resetLibrary` is tested as an internal maintenance operation, not exposed as a destructive Settings button.
 
-- Milestone 2: flip/shuffle/reverse sessions, Learn and Test with grading.
+- Milestone 2 completed: flip/shuffle/reverse sessions, Learn, Test, local session resume and results.
 - Milestone 3: deterministic review scheduling and real progress/activity.
 - Milestone 4: merge/replace reimports, TXT export, validated JSON backup/restore, folders and optional desktop directory import, further accessibility polish. Search and basic responsive/offline handling were brought forward.
 
