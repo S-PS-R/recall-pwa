@@ -13,4 +13,4 @@ The user has requested that every completed milestone be pushed to the project's
 - Keep secrets, imported user files, local databases, dependency folders, build output and test artifacts out of Git.
 - GitHub Pages deployment is manual through the workflow unless the user requests otherwise. Do not claim that a push has deployed the site.
 
-Milestones 1 and 2 are complete. Study modes and persistent sessions are implemented; scheduling and progress are Milestone 3; merge/replace imports, backup/restore and folders are Milestone 4.
+Milestones 1, 2 and 3 are complete. Study modes, persistent sessions, scheduling and progress are implemented. Merge/replace imports, backup/restore and folders remain Milestone 4. Typed word answers ignore capitals and punctuation in both modes; preserve meaningful Hindi marks and numeric punctuation. Keep color contrast tests and atomic review/session persistence intact.

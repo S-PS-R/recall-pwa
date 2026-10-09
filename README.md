@@ -1,6 +1,6 @@
 # Recall
 
-A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1 and 2 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
+A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1, 2 and 3 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
 
 ## Run locally
 
@@ -46,11 +46,37 @@ Open a set and tap **Study this set**, or select it from the **Study** tab.
 - **Learn:** choose Mixed, Multiple choice or Written answers. Immediate feedback shows the expected answer. Misses return after up to two other questions, with at most three attempts per card. The summary separates first-attempt accuracy from correctness across all attempts and lists mistakes.
 - **Test:** choose 1–100 unique cards (bounded by set size), direction, question style and matching rules. Questions are randomized without repeats. Submitted answers are final; score and mistake review appear after the last question.
 - Multiple-choice options come from the actual set and exclude equivalent or alternate correct answers. A question falls back to written when no distinct incorrect answer exists, including one-card sets. Identical prompts with distinct definitions accept any corresponding definition when typed.
-- Lenient matching ignores case, extra whitespace and Latin accents. Hindi vowel signs and nukta stay significant. Strict matching retains case, accents and internal spacing. Both trim outer whitespace and consider canonically equivalent Unicode equal; neither removes punctuation.
+- Both matching modes ignore capitalization and word punctuation (including smart apostrophes and Hindi danda). Lenient also ignores extra whitespace and Latin accents; Strict keeps accents and internal spacing significant. Hindi vowel signs and nukta stay significant in both. Numeric punctuation and mathematical symbols remain significant: `1.5` is not `15`, and `-1` is not `1`. This is deterministic matching, not semantic/AI grading. Already-submitted historical answers are not regraded.
 - Every submitted answer, feedback state and Flashcards action is saved to IndexedDB before moving on. **Pause session**, or reopen the set's study options and choose **Resume**. Completed sessions offer **View results**. Unsubmitted text is not saved. The ten most recent sessions for the set appear in the UI; older history remains in storage.
 - Sessions keep a snapshot of their starting card text so edits do not silently change grading mid-session. Start a new session to include edits. Deleting the set cascades its sessions. Storage failures show an error and retain the current question for retry.
 
-No per-card review scheduling or mastery values are created by Milestone 2. Those belong to Milestone 3. Progress explains this distinction; actual session summaries are available under each set's study options.
+## Spaced repetition and progress (Milestone 3)
+
+- Reveal a Flashcard, then rate it **Again**, **Hard**, **Good**, or **Easy**. Each button previews the next interval. One rating is recorded per card per session; flips alone do not count as reviews.
+- The first answer to each card in a Learn/Test session schedules **Good** if correct and **Again** if incorrect. Learn retries still affect the session score but never repeatedly promote a card. Both directions share one card schedule.
+- **Progress** shows due, new, learning and mastered counts; a long-term mastery bar; first-attempt quiz accuracy; and the latest 20 review events (filterable by set). Library tiles and set details show mastery, due counts and last review date. Counts refresh every 30 seconds and when returning to the app.
+- **Review due cards** opens a set containing only currently due cards. Flashcards keeps oldest-due order; Learn/Test still randomize. Unseen cards are shown separately as new and are not labelled overdue. Extra practice is available at any time.
+- Earlier session history is retained but never retroactively scheduled. The first review after this update starts a card's schedule. Deleting a set removes its reviews; editing a card's meaning resets that card's schedule and removes its review events, while retaining historical session scores. Old session snapshots cannot recreate progress for changed cards.
+- Review events, progress, session state and saved options are written in one transaction. Unique session/card event IDs prevent double counting. Session revisions reject conflicting writes from another tab; pause and resume the saved version after a conflict. Failed writes retain the current question.
+
+### Scheduling rule
+
+`src/domain/scheduler.ts` is pure and receives the current time explicitly. It uses elapsed 24-hour days (not local calendar-day boundaries), independent of daylight-saving changes:
+
+| Rating | Next interval when due/new | Other effects |
+| --- | --- | --- |
+| Again | 10 minutes | Reset successful repetitions; return to learning; ease −0.2 |
+| Hard | At least 1 day, otherwise previous interval ×1.2 rounded up | Reset successful repetitions; learning; ease −0.15 |
+| Good | 1 day initially, then at least 3 days or previous interval ×ease rounded up | One successful repetition |
+| Easy | At least 4 days or previous interval ×(ease +0.5) rounded up | One successful repetition; ease +0.15 |
+
+Ease starts at 2.5 and is bounded to 1.3–3.0. Intervals are capped at 365 days. A card is **mastered** after at least three successful scheduled reviews and an interval of at least seven days; this is an explicit app heuristic, not a guarantee of permanent recall. Practising early does not advance repetitions or postpone the due date. Early Hard demotes to learning without moving the due date; Again always schedules a short retry. A later failure removes mastery. No streak is displayed, avoiding misleading day/time-zone assumptions.
+
+### Readability and correct-answer feedback
+
+A higher-contrast navy/indigo palette replaces the low-contrast muted greens, with distinct text, input boundaries, focus rings and selected states in light and dark themes. Automated tests read the actual CSS tokens and check text at ≥4.5:1 and key control/focus boundaries at ≥3:1. This follows [WCAG text contrast](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum) and [non-text contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html); it is not a claim of a full accessibility audit. Correct/incorrect states also have text and icons, so color is not the only cue.
+
+[Quizlet's grading guide](https://help.quizlet.com/hc/en-us/articles/360048313652-Using-grading-options-US) accepts case/punctuation differences even in Strict mode. Its [Learn](https://help.quizlet.com/hc/en-us/articles/360030986971-Studying-with-Learn) and [Write](https://help.quizlet.com/hc/en-us/articles/360030990531-Studying-with-Write-mode) guides describe answer entry and error correction, but do not establish the exact current correct-answer transition. We therefore do not claim identical behavior. Recall's revised correct-answer panel removes duplicate answer/expected-answer blocks, shows a concise checkmarked confirmation, and provides a wide **Next question** button plus Enter support. Wrong answers keep detailed feedback. Nothing advances on a timer, so learners and screen readers control the pace.
 
 ### Updating your installed app
 
@@ -87,11 +113,11 @@ pnpm test:e2e
 
 Unit tests cover parser edge cases/limits/read failures, persistent reopen, validation, progress preservation/reset, foreign identity rejection, cascade deletion, v1 migration, and reset. Browser tests cover multi-file imports and skipped rows, no uploads/external requests, cancellation, duplicate-source acknowledgment, manual CRUD/reorder/confirmation, theme persistence, mobile overflow and actual service-worker offline reload at a repository subpath. Study tests cover matching rules, Hindi marks, unique test generation, alternate answers, tiny sets, retry limits, scoring, session persistence, keyboard controls, offline resume, and saved results. Screenshots and failing traces are written to ignored `test-results/`.
 
-Verified in this Windows workspace: TypeScript passed, **24 unit tests passed**, **14 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 425 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
+Verified in this Windows workspace: TypeScript passed, **35 unit tests passed**, **18 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 440 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
 
 If pnpm is not available in your terminal, install the pinned pnpm version or use your environment's bundled pnpm executable. After dependency installation, you can also start development directly with `node node_modules/vite/bin/vite.js`.
 
-Still verify on real iPhone Safari: Add to Home Screen and icon display; Files/Drive provider selection; VoiceOver and text scaling; keyboard and notch/safe-area behavior; cold start in airplane mode after installation; storage behavior after closing/reopening; app updates while an editor is open. Desktop emulation cannot establish these device-specific behaviors.
+Still verify on real iPhone Safari: Add to Home Screen and icon display; Files/Drive provider selection; VoiceOver and text scaling; keyboard and notch/safe-area behavior; cold start in airplane mode after installation; storage behavior after closing/reopening; app updates while an editor is open; rating button reachability; correct-answer Enter/Next interaction with VoiceOver; due counts after returning from the background. Desktop emulation cannot establish these device-specific behaviors.
 
 ## Free static hosting
 
@@ -110,10 +136,10 @@ Completed milestones are committed and pushed to GitHub after validation, with i
 
 ## Architecture and remaining milestones
 
-`src/app` owns navigation/shell and PWA status; `src/features/library` owns the library/editor/detail screens; `src/features/import` contains the independent parser and wizard; `src/db` owns schema/migrations/transactional operations; `src/domain` defines stable entities and identity; `src/components` contains shared dialogs; `src/styles` contains Tailwind plus responsive component styles. Study logic lives in `src/domain/study.ts`, session writes in `src/db/study.ts`, and study UI in `src/features/study`, `flashcards`, `learn` and `test`. Milestone 2 adds an optional `run` payload to existing session records without changing indexes, so the version-2 database remains compatible and no migration/reset is needed. Future schema/index changes must add a new Dexie version and migration test. `resetLibrary` is tested as an internal maintenance operation, not exposed as a destructive Settings button.
+`src/app` owns navigation/shell and PWA status; `src/features/library` owns the library/editor/detail screens; `src/features/import` contains the independent parser and wizard; `src/db` owns schema/migrations/transactional operations; `src/domain` defines stable entities and identity; `src/components` contains shared dialogs; `src/styles` contains Tailwind plus responsive component styles. Study logic lives in `src/domain/study.ts`, session writes in `src/db/study.ts`, and study UI in `src/features/study`, `flashcards`, `learn` and `test`. Milestone 2 adds an optional `run` payload to sessions. Milestone 3 upgrades IndexedDB from version 2 to version 3, adding a review-event table while retaining sets, cards, progress, settings and sessions. Migration tests verify this. Optional session revisions and source identity keys support safe concurrent saves and snapshot validation. Future schema/index changes must add a new Dexie version and migration test. `resetLibrary` is tested as an internal maintenance operation, not exposed as a destructive Settings button.
 
 - Milestone 2 completed: flip/shuffle/reverse sessions, Learn, Test, local session resume and results.
-- Milestone 3: deterministic review scheduling and real progress/activity.
+- Milestone 3 completed: deterministic review scheduling, due queues, real progress/activity, high-contrast colors and improved answer matching/feedback.
 - Milestone 4: merge/replace reimports, TXT export, validated JSON backup/restore, folders and optional desktop directory import, further accessibility polish. Search and basic responsive/offline handling were brought forward.
 
 Original code-native icons live in `public/`; optional `scripts/generate-icons.py` regenerates the PNG icons using Pillow. Tailwind's Vite integration follows [its official installation guide](https://tailwindcss.com/docs/installation/using-vite), and service-worker registration follows [Vite PWA's guide](https://vite-pwa-org.netlify.app/guide/register-service-worker).

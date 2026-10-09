@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { cardKey, type CardInput, type CardProgress, type Flashcard, type Folder, type Setting, type StudySession, type StudySet } from '../domain/types';
 import { MAX_CARDS } from '../features/import/parser';
+import type { ReviewEvent } from '../domain/scheduler';
 
 export class RecallDatabase extends Dexie {
   folders!: Table<Folder, string>;
@@ -9,10 +10,12 @@ export class RecallDatabase extends Dexie {
   progress!: Table<CardProgress, string>;
   sessions!: Table<StudySession, string>;
   settings!: Table<Setting, string>;
+  reviews!: Table<ReviewEvent, string>;
   constructor(name = 'recall-library') {
     super(name);
     this.version(1).stores({ folders: 'id, parentId', sets: 'id, folderId, updatedAt', cards: 'id, setId, [setId+position]', progress: 'cardId, dueAt, state', sessions: 'id, setId, startedAt', settings: 'key' });
     this.version(2).stores({ cards: 'id, setId, [setId+position], normalizedKey' }).upgrade(tx => tx.table('cards').toCollection().modify(card => { card.normalizedKey = cardKey(card); }));
+    this.version(3).stores({ reviews: 'id, cardId, setId, sessionId, reviewedAt' });
   }
 }
 export const db = new RecallDatabase();
@@ -37,7 +40,7 @@ export async function createSets(drafts: SetDraft[], database = db) {
 }
 export async function updateSet(id: string, draft: SetDraft, cards: (CardInput & { id?: string })[], database = db) {
   validateDraft({ ...draft, cards });
-  await database.transaction('rw', database.sets, database.cards, database.progress, database.sessions, async () => {
+  await database.transaction('rw', [database.sets, database.cards, database.progress, database.sessions, database.reviews], async () => {
     if (!await database.sets.get(id)) throw new Error('This set no longer exists. Return to your library.');
     const existing = await database.cards.where('setId').equals(id).toArray();
     const byId = new Map(existing.map(card => [card.id, card]));
@@ -52,17 +55,19 @@ export async function updateSet(id: string, draft: SetDraft, cards: (CardInput &
     const nextById = new Map(next.map(card => [card.id, card]));
     const changedOrRemoved = existing.filter(old => nextById.get(old.id)?.normalizedKey !== old.normalizedKey);
     await database.progress.bulkDelete(changedOrRemoved.map(card => card.id));
+    await database.reviews.where('cardId').anyOf(changedOrRemoved.map(card => card.id)).delete();
     await database.cards.bulkDelete(existing.filter(card => !used.has(card.id)).map(card => card.id));
     await database.cards.bulkPut(next);
     await database.sets.update(id, { title: draft.title.trim(), description: draft.description?.trim(), updatedAt: now });
   });
 }
 export async function deleteSet(id: string, database = db) {
-  await database.transaction('rw', database.sets, database.cards, database.progress, database.sessions, async () => {
+  await database.transaction('rw', [database.sets, database.cards, database.progress, database.sessions, database.reviews], async () => {
     const ids = await database.cards.where('setId').equals(id).primaryKeys();
     await database.progress.bulkDelete(ids);
     await database.cards.bulkDelete(ids);
     await database.sessions.where('setId').equals(id).delete();
+    await database.reviews.where('setId').equals(id).delete();
     await database.sets.delete(id);
   });
 }

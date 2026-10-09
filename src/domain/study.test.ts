@@ -8,7 +8,7 @@ describe('answer matching', () => {
   it('ignores Latin accents, case and repeated whitespace in lenient mode', () => {
     expect(gradeAnswer('  CAFÉ   au lait ', ['cafe au lait'], 'lenient')).toBe(true);
     expect(gradeAnswer('café', ['cafe'], 'strict')).toBe(false);
-    expect(gradeAnswer('Hello', ['hello'], 'strict')).toBe(false);
+    expect(gradeAnswer('Hello', ['hello'], 'strict')).toBe(true);
     expect(gradeAnswer('two  words', ['two words'], 'strict')).toBe(false);
     expect(gradeAnswer(' e\u0301 ', ['é'], 'strict')).toBe(true);
     expect(gradeAnswer(' ', [''], 'lenient')).toBe(false);
@@ -17,7 +17,18 @@ describe('answer matching', () => {
     expect(normalizeAnswer('लड़की', 'lenient')).toBe('लड़की'.normalize('NFC'));
     expect(gradeAnswer('लडकी', ['लड़की'], 'lenient')).toBe(false);
     expect(gradeAnswer('लड़क', ['लड़की'], 'lenient')).toBe(false);
-    expect(gradeAnswer('hello', ['hello!'], 'lenient')).toBe(false);
+    expect(gradeAnswer('hello', ['hello!'], 'lenient')).toBe(true);
+  });
+  it('ignores case and Unicode punctuation in both modes without losing meaningful symbols', () => {
+    for (const mode of ['strict', 'lenient'] as const) {
+      expect(gradeAnswer('HOW are you', ['How are you?'], mode)).toBe(true);
+      expect(gradeAnswer('im fine', ['I’m fine!'], mode)).toBe(true);
+      expect(gradeAnswer('नमस्ते', ['नमस्ते।'], mode)).toBe(true);
+      expect(gradeAnswer('!!!', ['?'], mode)).toBe(false);
+      expect(gradeAnswer('15', ['1.5'], mode)).toBe(false);
+      expect(gradeAnswer('1', ['-1'], mode)).toBe(false);
+      expect(gradeAnswer('2', ['2+'], mode)).toBe(false);
+    }
   });
 });
 describe('question generation and scoring', () => {

@@ -4,16 +4,22 @@ export type Direction = 'forward' | 'reverse';
 export type Comparison = 'lenient' | 'strict';
 export type QuestionMode = 'mixed' | 'choice' | 'written';
 export interface StudyOptions { direction: Direction; comparison: Comparison; questionMode: QuestionMode; count: number }
-export interface Question { cardId: string; prompt: string; answer: string; accepted: string[]; kind: 'choice' | 'written'; choices: string[] }
+export interface Question { cardId: string; prompt: string; answer: string; sourceKey?: string; accepted: string[]; kind: 'choice' | 'written'; choices: string[] }
 export interface Answer { cardId: string; prompt: string; expected: string; given: string; correct: boolean }
 export interface StudyRun {
   options: StudyOptions; questions: Question[]; queue: number[]; answers: Answer[];
   index: number; flipped: boolean; visited: string[]; feedback?: Answer;
+  ratings?: { cardId: string; rating: import('./scheduler').Rating }[];
 }
 export type ActiveSession = StudySession & { run: StudyRun };
 
 export function normalizeAnswer(value: string, comparison: Comparison) {
-  const trimmed = value.trim().normalize('NFC');
+  const trimmed = value.trim().normalize('NFC').toLowerCase().replace(/\p{P}/gu, (mark, offset, source: string) => {
+    const before = source[offset - 1] ?? '', after = source[offset + mark.length] ?? '';
+    // Keep numeric punctuation: 1.5 must not equal 15, and -1 must not equal 1.
+    if (/\p{N}/u.test(after) && (/\p{N}/u.test(before) || (mark === '-' && !/[\p{L}\p{N}]/u.test(before)))) return mark;
+    return '';
+  }).trim();
   if (comparison === 'strict') return trimmed;
   // Strip accents on Latin letters only. Hindi vowel signs and nukta remain significant.
   return trimmed.normalize('NFD').replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC').toLowerCase().replace(/\s+/gu, ' ');
@@ -30,7 +36,7 @@ export function shuffle<T>(items: readonly T[], random: () => number = Math.rand
 export function createSession(id: string, setId: string, mode: StudySession['mode'], cards: Flashcard[], options: StudyOptions, now: number, random: () => number = Math.random): ActiveSession {
   if (!cards.length) throw new Error('Add at least one card before studying.');
   if (!Number.isInteger(options.count) || options.count < 1 || options.count > cards.length) throw new Error('Choose a question count within this set’s size.');
-  const sides = cards.map(card => ({ cardId: card.id, prompt: options.direction === 'forward' ? card.front : card.back, answer: options.direction === 'forward' ? card.back : card.front }));
+  const sides = cards.map(card => ({ cardId: card.id, sourceKey: card.normalizedKey, prompt: options.direction === 'forward' ? card.front : card.back, answer: options.direction === 'forward' ? card.back : card.front }));
   const selected = mode === 'flashcards' ? sides : shuffle(sides, random).slice(0, options.count);
   const questions = selected.map((item, index): Question => {
     if (mode === 'flashcards') return { ...item, accepted: [item.answer], kind: 'written', choices: [] };
