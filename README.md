@@ -1,6 +1,6 @@
 # Recall
 
-A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1, 2 and 3 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
+A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1–4 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
 
 ## Run locally
 
@@ -32,7 +32,7 @@ Open `http://127.0.0.1:4173/quizrep/`. On macOS/Linux, use `VITE_BASE_PATH=/quiz
 
 - Responsive Library and Set detail screens, search, sort, safe-area-aware mobile navigation, system/light/dark theme, keyboard focus states and native modal focus trapping.
 - Local multi-file `.txt`/`.tsv` import via the browser Files picker: editable titles, accepted/invalid/duplicate counts, first-three-card preview, line-numbered errors, selection, confirmation and success summary.
-- Explicit acknowledgment before skipping invalid rows or importing a matching title/source as a **new** set. Nothing is overwritten. Cancel saves nothing. All selected sets are saved in one transaction.
+- Explicit acknowledgment before skipping invalid rows, creating duplicate sets, merging cards, or replacing cards. Cancel saves nothing. All selected files are saved in one transaction.
 - Manual set/card creation, title/description editing, card editing, reorder, confirmed card removal and confirmed set deletion.
 - Persistent IndexedDB storage, transactional CRUD, cascading deletion of associated cards/progress/history, and an explicit v1 → v2 migration that backfills normalized identity keys without changing display text.
 - Offline app-shell precaching, manifest and PNG install icons, subpath support, and a user-controlled update prompt. Updates wait until editors/import dialogs are closed and you leave Study. First installation claims the open page once caching completes; updates still require user confirmation.
@@ -82,13 +82,25 @@ A higher-contrast navy/indigo palette replaces the low-contrast muted greens, wi
 
 You do not need to stop or uninstall the existing phone app during development. After the new milestone is pushed, run the existing GitHub Pages workflow. Once deployment succeeds, open Recall online, return to **Library**, and tap **Update app** when offered. If no update prompt appears, close and reopen it online. Keep the same URL and do not clear website data: existing sets and sessions remain in IndexedDB. The update prompt is hidden on Study so it cannot reload an active question.
 
+## Export, backup, and organization (Milestone 4)
+
+- **Folders:** Library → Add folder; rename or delete from the folder list. Open a set and use its Folder selector to move it. Filter the Library by folder or Unfiled while searching. Deleting a folder requires confirmation and keeps all its sets, cards, progress and history in Unfiled. Folder nesting is not exposed in this version.
+- **Refresh / Reimport:** open a set, tap Refresh / Reimport, then manually choose the latest TXT/TSV file. Choose Import as new, Merge, or Replace and select the destination. Merge keeps the existing order and adds new pairs. Replace follows file order and displays how many cards will be removed before confirmation. The preview title becomes the destination title; its description and folder remain unchanged. Unchanged NFC-normalized term/definition pairs retain their IDs, schedules and review events. Changed pairs are new cards; removed cards lose their schedules and review events, while historical session snapshots remain. A changed destination or repeated destination within one batch aborts the whole batch.
+- **TXT export:** open a set → Export TXT. Exports literal terms, a tab, and definitions in displayed order, with no inserted labels. Additional tabs in definitions are retained. Terms containing tabs, or either side containing line breaks, cannot be represented by the import format; the UI directs you to JSON backup instead of silently changing the text. TXT exports do not contain progress.
+- **Full backup:** Settings → Export library backup downloads a versioned JSON snapshot of all seven tables: folders, sets, cards, progress, sessions, settings and review events. Export reads one consistent transaction. On iPhone, open the browser download and use Share → Save to Files; choose Google Drive if its Files provider is enabled. Keep the file outside browser storage.
+- **Restore:** Settings → Restore backup → select the JSON file → review counts and date. **Merge** adds every backed-up set/folder as a separate copy with its progress and sessions, retaining the current device’s preferences. It does not deduplicate or combine two devices’ progress; repeat imports create duplicates. **Replace** removes the current library and restores all backup data, including preferences, only after explicit confirmation. Both methods assign fresh IDs and remap all references, including deleted-card snapshots, so old open tabs cannot overwrite restored sessions. Card contents, scheduling dates and session states are preserved.
+- Restore validates format/version, record types, unique identifiers, references, card identities, session indexes and answer totals before writing. Validation runs again at the write boundary. All restore writes, including replacement clearing, are one atomic transaction: a failure leaves the original library intact. Backup version 1 and files up to **25 MiB** are supported; larger or unsupported files fail with an explanation. Backups are plain JSON, not encrypted. No file contents are uploaded.
+- **Desktop directory import:** Settings → Import desktop folder uses the browser’s directory picker when supported and selects TXT/TSV files recursively. The normal 20-file / 2 MiB-per-file / 5,000-row limits apply. Each file becomes a separate set; directory hierarchy is not converted to folders. Other files are ignored. On iPhone or unsupported browsers, use Import files instead.
+
+No new dependency, backend, or database schema version is required for Milestone 4. Existing Milestone 3 scheduling, matching, feedback, and session persistence are unchanged. Data dialogs suppress the update prompt until they finish. Restore and reimport work offline once the app is cached and the source file is available locally.
+
 ## Import format and safeguards
 
 Each nonempty line is `term<TAB>definition`, using a literal tab. Hindi and English are supported without inserted prefixes or tags. Files are read with `File.text()` entirely on-device. The parser trims surrounding whitespace but preserves case, Unicode, combining characters, punctuation and user-authored labels. UTF-8 BOM and CRLF/LF/CR are handled. The **first tab** is the delimiter; later tabs remain inside the definition. Commas are never inferred as separators.
 
 Exact pairs after trimming are counted as duplicates and skipped, visibly in preview. Distinct definitions for the same term remain separate cards. Invalid rows require explicit acknowledgment before saving the valid subset. Empty/unreadable files cannot be imported. Limits: **2 MiB per file, 5,000 nonempty rows per file, 20 files per selection**; files are read sequentially. Error displays cap at 100 lines, with the total shown. Set details render cards in batches of 50.
 
-Card identity uses a JSON-framed NFC-normalized pair for future reconciliation; display text is not normalized. Reordering and renaming preserve card IDs and progress. Changing a card's content resets that card's review progress. Removing a card deletes its progress. Deleting a set also deletes its session history.
+Card identity uses a JSON-framed NFC-normalized pair for reimport reconciliation; display text is not normalized. Reordering and renaming preserve card IDs and progress. Changing a card's content resets that card's review progress. Removing a card deletes its progress. Deleting a set also deletes its session history.
 
 ## iPhone installation and Files
 
@@ -98,7 +110,7 @@ Card identity uses a JSON-framed NFC-normalized pair for future reconciliation; 
 4. Tap **Import files**, browse Files and choose `.txt` or `.tsv` files. If Google Drive is installed and enabled as a Files location, it can supply the files. Download a local copy first if a provider cannot read a file.
 5. Review the preview and confirm. Multiple selection varies by iOS version and provider; importing files one at a time also works.
 
-Imported data stays on this device/browser. There is no automatic iPhone/computer sync or persistent access to a Drive folder. Browser data clearing, eviction, or removing the app can lose the library. **Keep original source files until backup/restore is implemented.** A persistent-storage grant is best effort and does not replace backups.
+Imported data stays on this device/browser. There is no automatic iPhone/computer sync or persistent access to a Drive folder. Browser data clearing, eviction, or removing the app can lose the library. **Export library backups regularly and save them outside this browser.** A persistent-storage grant is best effort and does not replace backups.
 
 ## Validation
 
@@ -111,13 +123,15 @@ pnpm test:e2e
 
 `test:e2e` first builds at `/quizrep/` and starts a production preview. Windows uses installed Microsoft Edge; other platforms use Playwright Chromium (`pnpm exec playwright install chromium` first). Set `PLAYWRIGHT_CHANNEL` to override the installed browser channel. The mobile project emulates an iPhone viewport in Chromium; it **does not claim to test iOS Safari**.
 
+Milestone 4 tests cover reimport reconciliation, stale-preview rejection, atomic batch/restore rollback, malformed backups, all-table round trips, retained scheduling, resumed sessions without double reviews, deleted-card snapshots, merge isolation, folder lifecycle and TXT fidelity. Browser tests exercise these data flows offline and preserve the existing study regression suite.
+
 Unit tests cover parser edge cases/limits/read failures, persistent reopen, validation, progress preservation/reset, foreign identity rejection, cascade deletion, v1 migration, and reset. Browser tests cover multi-file imports and skipped rows, no uploads/external requests, cancellation, duplicate-source acknowledgment, manual CRUD/reorder/confirmation, theme persistence, mobile overflow and actual service-worker offline reload at a repository subpath. Study tests cover matching rules, Hindi marks, unique test generation, alternate answers, tiny sets, retry limits, scoring, session persistence, keyboard controls, offline resume, and saved results. Screenshots and failing traces are written to ignored `test-results/`.
 
-Verified in this Windows workspace: TypeScript passed, **35 unit tests passed**, **18 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 440 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
+Verified in this Windows workspace: TypeScript passed, **44 unit tests passed**, **24 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 460 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
 
 If pnpm is not available in your terminal, install the pinned pnpm version or use your environment's bundled pnpm executable. After dependency installation, you can also start development directly with `node node_modules/vite/bin/vite.js`.
 
-Still verify on real iPhone Safari: Add to Home Screen and icon display; Files/Drive provider selection; VoiceOver and text scaling; keyboard and notch/safe-area behavior; cold start in airplane mode after installation; storage behavior after closing/reopening; app updates while an editor is open; rating button reachability; correct-answer Enter/Next interaction with VoiceOver; due counts after returning from the background. Desktop emulation cannot establish these device-specific behaviors.
+Still verify on real iPhone Safari: Add to Home Screen and icon display; Files/Drive provider selection; VoiceOver and text scaling; keyboard and notch/safe-area behavior; cold start in airplane mode after installation; storage behavior after closing/reopening; app updates while an editor is open; rating button reachability; correct-answer Enter/Next interaction with VoiceOver; due counts after returning from the background. Also verify backup downloads → Share → Save to Files, JSON selection from Files/Drive, and restore on a second iPhone. Desktop emulation cannot establish these device-specific behaviors.
 
 ## Free static hosting
 
@@ -140,6 +154,6 @@ Completed milestones are committed and pushed to GitHub after validation, with i
 
 - Milestone 2 completed: flip/shuffle/reverse sessions, Learn, Test, local session resume and results.
 - Milestone 3 completed: deterministic review scheduling, due queues, real progress/activity, high-contrast colors and improved answer matching/feedback.
-- Milestone 4: merge/replace reimports, TXT export, validated JSON backup/restore, folders and optional desktop directory import, further accessibility polish. Search and basic responsive/offline handling were brought forward.
+- Milestone 4 completed: merge/replace reimports, TXT export, validated JSON backup/restore, folders, desktop directory import, accessible confirmation dialogs and responsive data tools. PDF generation is not included.
 
 Original code-native icons live in `public/`; optional `scripts/generate-icons.py` regenerates the PNG icons using Pillow. Tailwind's Vite integration follows [its official installation guide](https://tailwindcss.com/docs/installation/using-vite), and service-worker registration follows [Vite PWA's guide](https://vite-pwa-org.netlify.app/guide/register-service-worker).

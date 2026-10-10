@@ -271,3 +271,18 @@ progress::-moz-progress-bar { background: var(--accent); }
   .flashcard-controls .button { padding: 11px 12px; font-size: 12px; }
   .question-card, .answer-feedback, .study-results { padding: 22px 18px; } .study-workspace .row-between { align-items: flex-start; }
 }
+/* Library data tools share the existing contrast tokens and touch targets. */
+.action-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.folder-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding: 8px 0; }
+.folder-row > span { overflow-wrap: anywhere; min-width: 0; }
+.set-actions { margin: 20px 0; }
+.set-actions label { min-width: 160px; flex: 1; }
+.library-tools { flex-wrap: wrap; }
+.library-tools > select { max-width: 100%; }
+.desktop-folder-import { margin-top: 20px; }
+@media (pointer: coarse) { .desktop-folder-import { display: none; } }
+@media (max-width: 600px) {
+  .library-tools .search-field { order: -1; flex-basis: 100%; }
+  .library-tools > select { flex: 1; min-width: 0; font-size: 14px; }
+  .set-grid { grid-template-columns: 1fr; }
+}

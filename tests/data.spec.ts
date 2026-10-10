@@ -1,0 +1,65 @@
+import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+const file = (text: string) => ({ name: 'Hindi.txt', mimeType: 'text/plain', buffer: Buffer.from(text) });
+async function importInitial(page: Page) {
+  await page.goto('./'); await page.getByLabel('Choose flashcard files').setInputFiles(file('नमस्ते\tHello!\nलड़का\tBoy'));
+  await page.getByRole('button', { name: 'Import 2 cards', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Hindi', exact: true })).toBeVisible();
+}
+test('folders, TXT export, and offline backup restore preserve a paused rated session', async ({ page, context }, testInfo) => {
+  await importInitial(page);
+  const downloadText = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export TXT' }).click();
+  expect(await readFile(await (await downloadText).path() as string, 'utf8')).toBe('नमस्ते\tHello!\nलड़का\tBoy');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add folder', exact: true }).click(); await page.getByLabel('Folder name').fill('Languages'); await page.getByRole('button', { name: 'Save folder' }).click();
+  await page.getByRole('heading', { name: 'Hindi', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Folder', exact: true }).selectOption({ label: 'Languages' });
+  await page.getByRole('link', { name: 'Study this set' }).click(); await page.getByRole('button', { name: 'Start Flashcards', exact: true }).click();
+  await page.getByRole('button', { name: 'Show answer', exact: true }).click(); await page.getByRole('button', { name: 'Rate good' }).click();
+  await expect(page.getByText(/Rated good\./)).toBeVisible();
+  await page.goto('./#settings');
+  const downloadBackup = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export library backup' }).click();
+  const backup = await readFile(await (await downloadBackup).path() as string);
+  expect(JSON.parse(backup.toString()).progress).toHaveLength(1);
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; }); await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  await context.setOffline(true); await page.reload();
+  await page.getByLabel('Choose library backup').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
+  await page.getByLabel('Restore method').selectOption('replace');
+  await expect(page.getByRole('button', { name: 'Confirm restore' })).toBeDisabled();
+  await page.getByLabel('Replace all current library data with this backup.').check(); await page.getByRole('button', { name: 'Confirm restore' }).click();
+  await expect(page.getByText(/Backup restored on this device/)).toBeVisible();
+  await page.goto('./#library'); await page.getByLabel('Filter by folder').selectOption({ label: 'Languages' });
+  await page.getByRole('heading', { name: 'Hindi', exact: true }).click();
+  await page.getByRole('link', { name: 'Study this set' }).click(); await page.getByRole('button', { name: 'Resume', exact: true }).click();
+  await expect(page.getByText(/Rated good\./)).toBeVisible(); await expect(page.getByRole('button', { name: 'Rate good' })).toHaveCount(0);
+  await page.goto('./#progress'); await expect(page.locator('.activity-row')).toHaveCount(1);
+  await page.goto('./#library'); await page.getByRole('button', { name: 'Rename folder Languages' }).click(); await page.getByLabel('Folder name').fill('Vocabulary'); await page.getByRole('button', { name: 'Save folder' }).click();
+  await page.getByRole('button', { name: 'Delete folder Vocabulary' }).click(); await page.getByRole('button', { name: 'Delete folder and keep sets' }).click();
+  await page.getByLabel('Filter by folder').selectOption('unfiled'); await expect(page.getByRole('heading', { name: 'Hindi', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/${testInfo.project.name}-folders.png`, fullPage: true });
+});
+test('merge and replace reimports keep rated cards and warn before removal', async ({ page }) => {
+  await importInitial(page); await page.getByRole('link', { name: 'Study this set' }).click(); await page.getByRole('button', { name: 'Start Flashcards', exact: true }).click();
+  await page.getByRole('button', { name: 'Show answer', exact: true }).click(); await page.getByRole('button', { name: 'Rate good' }).click(); await expect(page.getByText(/Rated good\./)).toBeVisible();
+  await page.getByRole('link', { name: 'Back to set' }).click();
+  await page.getByLabel('Choose flashcard files').setInputFiles(file('नमस्ते\tHello!\nनया\tNew'));
+  await page.getByLabel('Import action').selectOption('merge'); await page.getByLabel('Destination set').selectOption({ label: await page.getByLabel('Destination set').locator('option').nth(1).innerText() });
+  await page.getByLabel('Merge these cards into the selected set.').check(); await page.getByRole('button', { name: 'Import 2 cards', exact: true }).click();
+  await expect(page.locator('.detail-card')).toHaveCount(3);
+  await page.getByLabel('Choose flashcard files').setInputFiles(file('नया\tNew\nनमस्ते\tHello!'));
+  await page.getByLabel('Import action').selectOption('replace'); await page.getByLabel('Destination set').selectOption({ index: 1 });
+  await expect(page.getByText(/Remove 1 existing cards/)).toBeVisible(); await expect(page.getByRole('button', { name: 'Import 2 cards', exact: true })).toBeDisabled();
+  await page.getByLabel('Replace the selected set’s cards and remove missing cards.').check(); await page.getByRole('button', { name: 'Import 2 cards', exact: true }).click();
+  await expect(page.locator('.detail-card')).toHaveCount(2); await expect(page.locator('.detail-card').first()).toContainText('नया');
+  await page.goto('./#progress'); await expect(page.locator('.activity-row')).toHaveCount(1);
+});
+test('invalid backups leave the library intact; merge is explicit and creates separate copies', async ({ page }) => {
+  await importInitial(page); await page.goto('./#settings');
+  await page.getByLabel('Choose library backup').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"version":99}') });
+  await expect(page.getByRole('alert')).toContainText('unsupported format or version');
+  const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export library backup' }).click(); const backup = await readFile(await (await downloading).path() as string);
+  await page.getByLabel('Choose library backup').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
+  await expect(page.getByRole('button', { name: 'Confirm restore' })).toBeDisabled(); await page.getByLabel('Add the backup as separate copies.').check(); await page.getByRole('button', { name: 'Confirm restore' }).click();
+  await expect(page.getByText(/Backup restored on this device/)).toBeVisible(); await page.goto('./#library'); await expect(page.getByRole('heading', { name: 'Hindi', exact: true })).toHaveCount(2);
+});
