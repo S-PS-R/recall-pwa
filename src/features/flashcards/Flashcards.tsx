@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, RotateCcw, Shuffle } from 'lucide-react';
 import { shuffle, type ActiveSession } from '../../domain/study';
 import { scheduleReview, type Rating } from '../../domain/scheduler';
 import type { CardProgress } from '../../domain/types';
+import { EnglishSpeech } from './EnglishSpeech';
 
 export function Flashcards({ session, busy, onChange, progress, now }: { session: ActiveSession; busy: boolean; onChange: (next: ActiveSession) => void; progress: CardProgress[]; now: number }) {
   const { run } = session;
@@ -25,6 +26,7 @@ export function Flashcards({ session, busy, onChange, progress, now }: { session
   return <div className="study-workspace">
     <div className="row-between"><span className="eyebrow">CARD {run.index + 1} OF {run.questions.length}</span><span className="muted text-sm">{run.visited.length} revealed</span></div>
     <progress aria-label="Cards revealed" value={run.visited.length} max={run.questions.length} />
+    {run.options.direction === 'reverse' && <EnglishSpeech key={`${session.id}-${session.revision}`} text={card.prompt} busy={busy} />}
     <button className={`flip-card ${run.flipped ? 'is-flipped' : ''}`} disabled={busy} aria-label={run.flipped ? 'Show prompt' : 'Show answer'} onClick={() => { if (!swiped.current) flip(); swiped.current = false; }}
       onTouchStart={event => { touch.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; swiped.current = false; }}
       onTouchEnd={event => { if (!touch.current || busy) return; const dx = event.changedTouches[0].clientX - touch.current.x, dy = event.changedTouches[0].clientY - touch.current.y; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) { swiped.current = true; move(dx < 0 ? 1 : -1); } touch.current = null; }}>

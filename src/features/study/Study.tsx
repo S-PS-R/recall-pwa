@@ -39,6 +39,15 @@ export function Study({ sets, cards, sessions, settings, setId, progress, now, r
   const saved = sessions.filter(item => item.setId === setId && item.run).sort((a, b) => b.startedAt - a.startedAt);
   const question = session && currentQuestion(session);
   const completed = session?.finishedAt !== undefined;
+  function start(speaking = false) {
+    if (lock.current) return;
+    try {
+      void change(createSession(crypto.randomUUID(), setId!, mode, setCards, {
+        ...options, direction: speaking ? 'reverse' : options.direction,
+        count: mode === 'flashcards' ? setCards.length : Math.min(options.count, setCards.length),
+      }, Date.now()));
+    } catch (err) { setError((err as Error).message); }
+  }
   return <>
     <a href={`#set/${setId}`} className="text-button back-link"><ArrowLeft size={17} />Back to set</a>
     <div className="page-heading"><div><span className="eyebrow">{session ? modes.find(item => item.id === session.mode)?.title.toUpperCase() : 'STUDY YOUR WAY'}</span><h1>{set.title}</h1><p className="muted">{session ? 'Saved on this device after every action.' : `${setCards.length} flashcards · Ready when you are`}</p></div>{session && !completed && <button className="button secondary" disabled={busy} onClick={() => setSession(undefined)}>Pause session</button>}</div>
@@ -46,7 +55,7 @@ export function Study({ sets, cards, sessions, settings, setId, progress, now, r
     {!session ? <>
       <section className="settings-panel"><h2>{reviewOnly ? 'Due-card review' : 'Your learning progress'}</h2><p>{stats.mastered} of {stats.total} mastered · {stats.due} due now</p><progress className="mastery-bar" aria-label="Set mastery" max={Math.max(1, stats.total)} value={stats.mastered} />{reviewOnly ? <><p>Only cards due now are included, oldest due first in Flashcards. New cards are not overdue.</p><a className="text-button" href={`#study/${setId}`}>Practice all cards</a></> : stats.due > 0 && <a className="button primary mt-4" href={`#study/${setId}/review`}>Review {stats.due} due cards</a>}</section>
       <div className="mode-grid" role="group" aria-label="Study mode">{modes.map(item => <button key={item.id} aria-pressed={mode === item.id} className={`mode-option ${mode === item.id ? 'selected' : ''}`} onClick={() => setMode(item.id)}><item.icon size={24} /><strong>{item.title}</strong><span>{item.text}</span></button>)}</div>
-      <form className="settings-panel" onSubmit={event => { event.preventDefault(); if (!lock.current) { try { void change(createSession(crypto.randomUUID(), setId, mode, setCards, { ...options, count: mode === 'flashcards' ? setCards.length : Math.min(options.count, setCards.length) }, Date.now())); } catch (err) { setError((err as Error).message); } } }}>
+      <form className="settings-panel" onSubmit={event => { event.preventDefault(); start(); }}>
         <div className="study-settings"><label>Study direction<select aria-label="Study direction" value={options.direction} disabled={busy} onChange={event => setOptions({ ...options, direction: event.target.value as StudyOptions['direction'] })}><option value="forward">Term → definition</option><option value="reverse">Definition → term</option></select></label>
           {mode !== 'flashcards' && <><label>Question style<select aria-label="Question style" value={options.questionMode} disabled={busy} onChange={event => setOptions({ ...options, questionMode: event.target.value as StudyOptions['questionMode'] })}><option value="mixed">Mixed</option><option value="choice">Multiple choice</option><option value="written">Written answers</option></select></label><label>Answer matching<select aria-label="Answer matching" value={options.comparison} disabled={busy} onChange={event => setOptions({ ...options, comparison: event.target.value as StudyOptions['comparison'] })}><option value="lenient">Lenient</option><option value="strict">Strict</option></select></label><label>Number of cards<input aria-label="Number of cards" type="number" min={1} max={Math.min(100, setCards.length)} required value={Math.min(options.count, setCards.length) || ''} disabled={busy} onChange={event => setOptions({ ...options, count: Number(event.target.value) })} /></label></>}
         </div>
@@ -54,6 +63,7 @@ export function Study({ sets, cards, sessions, settings, setId, progress, now, r
         {mode === 'learn' && <p className="muted text-sm mt-4">Missed cards return after up to two other questions, with a maximum of three attempts per card. First-attempt accuracy stays separate from retries.</p>}
         {mode === 'test' && <p className="muted text-sm mt-4">Cards are randomized without repeats. Answers are final when submitted. Your score and mistakes appear at the end.</p>}
         <button className="button primary mt-4" disabled={busy || !setCards.length}>{busy ? 'Saving…' : `Start ${modes.find(item => item.id === mode)?.title}`}</button>
+        {mode === 'flashcards' && <div className="speaking-start"><button type="button" className="button secondary" disabled={busy || !setCards.length} onClick={() => start(true)}>Start speaking practice</button><p className="muted text-sm">For Hindi → English sets: hear the English definition, say the Hindi term, then flip and rate yourself. Uses a free device voice.</p></div>}
       </form>
       {!!saved.length && <section className="saved-sessions"><h2>Pick up where you left off</h2><p className="muted text-sm">Sessions keep the card text from when they started. Start a new session to include edits.</p>{saved.slice(0, 10).map(item => <div className="saved-session" key={item.id}><div><strong>{modes.find(entry => entry.id === item.mode)?.title}</strong><p className="muted text-xs">{new Date(item.startedAt).toLocaleString()} · {item.finishedAt !== undefined ? 'Completed' : 'Paused'}</p></div><button className="button secondary" disabled={busy} onClick={() => { setError(''); setSession(item as ActiveSession); }}>{item.finishedAt !== undefined ? 'View results' : 'Resume'}</button></div>)}</section>}
     </> : completed ? <Results session={session} onDone={() => setSession(undefined)} /> : session.mode === 'flashcards' ? <Flashcards session={session} progress={progress} now={now} busy={busy} onChange={next => void change(next)} /> : <div className="study-workspace">

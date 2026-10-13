@@ -1,6 +1,6 @@
 # Recall
 
-A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1–4 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
+A private, mobile-first flashcard library built from `QUIZLET_PWA_CODEX_PROJECT.md`. Milestones 1–5 are implemented with React, TypeScript, Vite, Tailwind CSS, Dexie, and `vite-plugin-pwa`. There is no backend, account, analytics, Google API, or file upload. No demo sets are seeded.
 
 ## Run locally
 
@@ -94,6 +94,20 @@ You do not need to stop or uninstall the existing phone app during development. 
 
 No new dependency, backend, or database schema version is required for Milestone 4. Existing Milestone 3 scheduling, matching, feedback, and session persistence are unchanged. Data dialogs suppress the update prompt until they finish. Restore and reimport work offline once the app is cached and the source file is available locally.
 
+## Speaking practice (Milestone 5)
+
+Open a set → Study this set → Flashcards → **Start speaking practice**. This shortcut starts an ordinary, resumable Flashcards session in **Definition → term** direction. For the standard `Hindi<TAB>English` imports, the English definition appears first and the Hindi term stays hidden. Existing reverse-direction Flashcards sessions also offer the speech controls.
+
+1. Tap **Read English** to hear the prompt, or **Read slowly** for 0.75× speed. Tap again to replay. Playback starts only from your button press, including after moving to another card or resuming a session.
+2. Say the Hindi answer aloud. The app does not use a microphone, record, transcribe, or automatically grade you.
+3. Flip the card to reveal the original Hindi text and choose **Again**, **Hard**, **Good**, or **Easy**. The existing atomic review/session persistence and one-rating-per-card rule apply. Listening alone does not record a review.
+
+Speech uses the browser's built-in `speechSynthesis` API and only voices reported as local English voices (`localService`). No subscription, paid API, API key, new dependency, account, or server is needed; card text is not sent to a remote speech provider. Voice selection prefers the device's default local English voice, then its first available local English voice. The app waits for asynchronously loaded voices and checks again on playback. Stop reading, revealing/navigating/shuffling cards, reversing direction, pausing/finishing a session, and hiding/leaving the page cancel playback.
+
+**Device limitations:** voice availability and quality depend on the browser and installed device voices. If no local English voice is exposed or playback fails, the app explains this and still allows revealing and self-rating. Offline speech requires a usable voice installed on the device; real iPhone playback and airplane-mode behavior must be verified on the phone. The shortcut assumes English is the definition side; it does not detect languages or translate card text. Other study modes and normal forward Flashcards remain available.
+
+GitHub Pages deployment is unchanged and still manual. No database migration or backup format change is needed; speaking practice resumes as a reverse Flashcards session.
+
 ## Import format and safeguards
 
 Each nonempty line is `term<TAB>definition`, using a literal tab. Hindi and English are supported without inserted prefixes or tags. Files are read with `File.text()` entirely on-device. The parser trims surrounding whitespace but preserves case, Unicode, combining characters, punctuation and user-authored labels. UTF-8 BOM and CRLF/LF/CR are handled. The **first tab** is the delimiter; later tabs remain inside the definition. Commas are never inferred as separators.
@@ -127,11 +141,13 @@ Milestone 4 tests cover reimport reconciliation, stale-preview rejection, atomic
 
 Unit tests cover parser edge cases/limits/read failures, persistent reopen, validation, progress preservation/reset, foreign identity rejection, cascade deletion, v1 migration, and reset. Browser tests cover multi-file imports and skipped rows, no uploads/external requests, cancellation, duplicate-source acknowledgment, manual CRUD/reorder/confirmation, theme persistence, mobile overflow and actual service-worker offline reload at a repository subpath. Study tests cover matching rules, Hindi marks, unique test generation, alternate answers, tiny sets, retry limits, scoring, session persistence, keyboard controls, offline resume, and saved results. Screenshots and failing traces are written to ignored `test-results/`.
 
-Verified in this Windows workspace: TypeScript passed, **44 unit tests passed**, **24 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 460 KiB. Dependency peer checks report no issues. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
+Verified for Milestone 5 in this Windows workspace: TypeScript passed, **44 unit tests passed**, **32 Edge/Chromium browser tests passed** across desktop and mobile emulation, and the production PWA build passed at `/quizrep/`. The generated service worker precaches approximately 464 KiB. Speaking tests use mocked speech APIs to verify English-only/local-voice selection, hidden Hindi answers, normal/slow playback, cancellation, delayed voice loading, errors/retry, unavailable speech, persisted self-ratings and offline resume. They do not establish audible output or installed voice availability on a real device. The mobile speaking screen was also visually checked. The editor pages through 25 cards at a time to avoid mounting thousands of text areas on a phone.
 
 If pnpm is not available in your terminal, install the pinned pnpm version or use your environment's bundled pnpm executable. After dependency installation, you can also start development directly with `node node_modules/vite/bin/vite.js`.
 
 Still verify on real iPhone Safari: Add to Home Screen and icon display; Files/Drive provider selection; VoiceOver and text scaling; keyboard and notch/safe-area behavior; cold start in airplane mode after installation; storage behavior after closing/reopening; app updates while an editor is open; rating button reachability; correct-answer Enter/Next interaction with VoiceOver; due counts after returning from the background. Also verify backup downloads → Share → Save to Files, JSON selection from Files/Drive, and restore on a second iPhone. Desktop emulation cannot establish these device-specific behaviors.
+
+For speaking practice on the real iPhone, check Read English and Read slowly in both Safari and the installed PWA, replay/stop, switching cards, locking/backgrounding the phone, volume/headphones, and airplane mode with an installed English voice. Confirm that Hindi stays hidden until you reveal it and ratings still persist after reopening.
 
 ## Free static hosting
 
@@ -155,5 +171,6 @@ Completed milestones are committed and pushed to GitHub after validation, with i
 - Milestone 2 completed: flip/shuffle/reverse sessions, Learn, Test, local session resume and results.
 - Milestone 3 completed: deterministic review scheduling, due queues, real progress/activity, high-contrast colors and improved answer matching/feedback.
 - Milestone 4 completed: merge/replace reimports, TXT export, validated JSON backup/restore, folders, desktop directory import, accessible confirmation dialogs and responsive data tools. PDF generation is not included.
+- Milestone 5 completed: English read-aloud speaking practice with normal/slow local device voices, hidden Hindi answers, manual self-rating, and existing offline session persistence. No speech recognition or paid service.
 
 Original code-native icons live in `public/`; optional `scripts/generate-icons.py` regenerates the PNG icons using Pillow. Tailwind's Vite integration follows [its official installation guide](https://tailwindcss.com/docs/installation/using-vite), and service-worker registration follows [Vite PWA's guide](https://vite-pwa-org.netlify.app/guide/register-service-worker).

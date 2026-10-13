@@ -200,6 +200,12 @@ summary { min-height: 44px; padding: 12px 0; font-weight: 600; }
 .flip-hint { font-size: 12px; color: var(--muted); }
 .flashcard-controls { display: flex; justify-content: space-between; gap: 8px; margin-top: 20px; }
 .study-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.speaking-start { margin-top: 20px; }
+.speaking-start p { margin: 10px 0 0; }
+.speech-panel { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin: 16px 0; }
+.speech-panel > p { margin: 0; }
+.speech-controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.speech-panel .error { margin-top: 12px; }
 .question-card, .answer-feedback, .study-results { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 30px; }
 .question-prompt { font-size: clamp(25px, 4vw, 34px); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; margin: 15px 0 30px; }
 .question-prompt:focus { outline: none; }
