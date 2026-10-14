@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 declare global {
   interface Window {
+    saveTest: { completed: boolean; release: () => void };
     speechTest: {
       calls: { text: string; rate: number; lang: string; voice: string }[];
       cancellations: number;
@@ -67,7 +68,7 @@ test('English playback leaves Hindi hidden, self-ratings persist and speaking re
   const beforeFlip = await page.evaluate(() => window.speechTest.cancellations);
   await page.getByRole('button', { name: 'Show answer', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Show prompt', exact: true })).toContainText('नमस्ते');
-  expect(await page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeFlip);
+  await expect.poll(() => page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeFlip);
   // An event from canceled playback must not put an error on the next card.
   await page.evaluate(() => window.speechTest.fail());
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -88,7 +89,7 @@ test('English playback leaves Hindi hidden, self-ratings persist and speaking re
   await page.screenshot({ path: `test-results/${testInfo.project.name}-speaking.png`, fullPage: true });
   const beforePause = await page.evaluate(() => window.speechTest.cancellations);
   await page.getByRole('button', { name: 'Pause session' }).click();
-  expect(await page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforePause);
+  await expect.poll(() => page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforePause);
 });
 
 test('late device voices load, playback errors allow retry, navigation and reversing stop speech', async ({ page }) => {
@@ -105,13 +106,51 @@ test('late device voices load, playback errors allow retry, navigation and rever
   await expect(page.getByRole('alert')).toHaveCount(0);
   const beforeNext = await page.evaluate(() => window.speechTest.cancellations);
   await page.getByRole('button', { name: 'Next', exact: true }).click();
-  expect(await page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeNext);
+  // Clicking starts an IndexedDB save; the card and speech cleanup update after it commits.
+  await expect(page.getByRole('button', { name: 'Show answer', exact: true })).toContainText('Boy');
+  await expect.poll(() => page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeNext);
   await expect(page.getByRole('button', { name: 'Stop reading' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Read English', exact: true }).click();
   const beforeReverse = await page.evaluate(() => window.speechTest.cancellations);
   await page.getByRole('button', { name: 'Reverse direction' }).click();
   await expect(page.getByRole('region', { name: 'Speaking practice' })).toHaveCount(0);
-  expect(await page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeReverse);
+  await expect.poll(() => page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeReverse);
+});
+
+test('speech cleanup follows the saved card transition even when storage completion is delayed', async ({ page }) => {
+  await mockSpeech(page);
+  await start(page);
+  await page.getByRole('button', { name: 'Read English', exact: true }).click();
+  const beforeNext = await page.evaluate(() => window.speechTest.cancellations);
+  await page.evaluate(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(IDBTransaction.prototype, 'oncomplete')!;
+    window.saveTest = { completed: false, release: () => {} };
+    // Hold only the next session write's completion notification, not its data or atomicity.
+    Object.defineProperty(IDBTransaction.prototype, 'oncomplete', {
+      ...descriptor,
+      set(this: IDBTransaction, callback: (this: IDBTransaction, event: Event) => void) {
+        if (this.mode !== 'readwrite' || !this.objectStoreNames.contains('sessions')) {
+          descriptor.set!.call(this, callback); return;
+        }
+        Object.defineProperty(IDBTransaction.prototype, 'oncomplete', descriptor);
+        descriptor.set!.call(this, (event: Event) => {
+          window.saveTest.completed = true;
+          window.saveTest.release = () => callback.call(this, event);
+        });
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.saveTest.completed)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Show answer', exact: true })).toContainText('Hello');
+  await expect(page.getByRole('button', { name: 'Read English', exact: true })).toBeDisabled();
+  expect(await page.evaluate(() => window.speechTest.cancellations)).toBe(beforeNext);
+  await page.evaluate(() => window.saveTest.release());
+  await expect(page.getByRole('button', { name: 'Show answer', exact: true })).toContainText('Boy');
+  await expect.poll(() => page.evaluate(() => window.speechTest.cancellations)).toBeGreaterThan(beforeNext);
+  await expect(page.getByRole('button', { name: 'Stop reading' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Read English', exact: true }).click();
+  expect(await page.evaluate(() => window.speechTest.calls.at(-1)?.text)).toBe('Boy');
 });
 
 for (const mode of ['remote', 'unsupported'] as const) {
